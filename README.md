@@ -186,4 +186,222 @@ $.ajax({
   contentType: "application/json",
   sucess: function(data) { console.log(data.objects); }
 });
+
+
+from flask import Flask
+from flask.ext.restless import APIManager
+
+def add_cors_headers(response):
+  response.headers['Access-Control-Allow-Origin'] = 'example.com'
+  response.headers['Access-Control-Allow-Credentials'] = 'true'
+  return response
+  
+app = Flask(__name__)
+manager = APIManager(app)
+blueprint = manager.create_api(Person)
+blueprint.after_request(add_cors_headers)
+
+from flask import Flask
+from flask.ext.restless import APIManager
+from flask.ext.restless import NO_CHANGE
+from flask.ext.restless import ProcessingException
+from flask.ext.login import current_user
+from mymodels import User
+
+def auth_func(*args, **kwargs):
+  if not current_user.is_authenticated():
+    raise ProcessingException(description='Not authenticated!', code=401)
+  return True
+
+app = Flask(__name__)
+api_manager = APIManager(app)
+api_manager.create_api(User, preprocessors=dict(GET_SINGLE=[auth_func],
+  GET_MANY=[auth_func]))
+
+
+class Group(Base):
+  __tablename__ = 'group'
+  id = Column(Integer, primary_key=True)
+  groupname = Column(Unicode)
+  people = relationship('Person')
+
+class Person(Base):
+  __tablename__ = 'person'
+  id = Column(Integer, primary_key=True)
+  group_id = Column(Integer, ForeignKey('group.id'))
+  group = relationship('Group')
+
+  @classmethod
+  def query(cls):
+    original_query = session.query(cls)
+    condition = (Group.groupname == 'students')
+    return original_query.join(Group).filter(condition)
+
+def preprocessor(search_params=None, **kw):
+  if search_params is None:
+    return
+  filt = dict(name='id', op='neq', val=1)
+  if 'filters' not in search_params:
+    search_params['filters'] = []
+  search_params['filters'].append(filt)
+  
+apimanager.create_api(Person, preprocessors=dict(GET_MANY=[preprocessor]))
+
+
+from flask import Flask
+from flask.ext.restless import APIManager
+from flask.ext.restless import ProcessingException
+from flask.ext.login import current_user
+from mymodels import User
+from mymodels import session
+
+def auth_func(*args, **kw):
+  if not current_user.is_authenticated():
+    raise ProcessingException(description='Not authenticated!', code=401)
+
+app = Flask(__name__)
+api_manager = APIManager(app, session=session,
+  preprocessors=dict(POST=[auth_func]))
+api_manager.create_api(User)
+
+
+def check_auth(instance_id=None, **kw):
+  current_user = ...
+  if not is_authorized_to_modify(current_user, instance_id):
+    raise ProcessingException(description='Not Authorized',
+      code=401)
+manager.create_api(Person, preprocessors=dict(GET_SINGLE=[check_auth]))
+
+
+def delete_single_preprocessor(instance_id=None, **kw):
+  pass
+  
+def delete_postprocessor(was_deleted=None, **kw):
+  pass
+  
+def delete_many_preprocessor(search_params=None, **kw):
+  pass
+  
+def delete_many_postprocessor(result=None, search_params=None, **kw):
+  pass
+
+def post_preprocessor(data=None, **kw):
+  pass
+  
+def post_postprocessor(result=None, **kw):
+  pass
+
+def post_preprocessor(data=None, **kw):
+  pass
+  
+def post_postprocessor(result=None, **kw):
+  pass
+  
+def patch_postprocessor(query=None, data=None, search_params=None, **kw):
+  pass
+
+def patch_many_preprocessor(search_params=None, data=None, **kw):
+  pass
+  
+def patch_single_preprocessor(instance_id=None, data=None, **kw):
+  pass
+  
+def patch_single_postprocessor(result=None, **kw):
+  pass
+
+def get_single_preprocessor(instance_id=None, **kw):
+  pass
+  
+def get_single_postprocessor(result=None, **kw):
+  pass
+
+def get_many_preprocessor(search_params=None, **kw):
+  pass
+  
+def get_many_postprocessor(result=None, search_params=None, **kw):
+  pass
+
+def pre_get_single(**kw): pass
+def pre_get_many(**kw): pass
+def post_patch_many(**kw): pass
+def pre_delete(**kw): pass
+
+manager.create_api(Person,
+  methods=['GET', 'PATCH', 'DELETE'],
+  allow_patch_many=True,
+  preprocessors={
+    'GET_SINGLE': [pre_get_single],
+    'GET_MANY': [pre_get_many],
+    'DELETE': [pre_delete]
+  },
+  postprocessors={
+    'PATCH_MANY': [post_patch_many]
+  } )
+
+
+apimanager.create_api(Person, results_per_page=2)
+
+class Person(Base):
+  __tablename__ = 'person'
+  id = Column(Integer, primary_key=True)
+  name = Column(Unicode)
+  age = Column(Integer)
+  
+  def name_and_age(self):
+    return "%s (aged %d)" % (self.name, self.age)
+
+include_method = ['name_and_age']
+manager.create_api(Person, include_methods=['name_and_age'])
+  
+includes = ['name', 'birth_date', 'computers', 'computers.vendor']
+apimanager.create_api(Person, include_columns=includes)
+
+includes = ['name', 'birth_date', 'computers.vendor']
+apimanager.create_api(Person, include_columns=includes)
+
+class Person(db.Model):
+  id = db.Column(db.Integer, primary_key=True)
+  name= db.Column(db.Unicode, unique=True)
+  birth_date = db.Column(db.Date)
+  computers = db.relationship('Computer')
+
+apimanager.create_api(Person, include_columns=['name', 'birth_date'])
+
+apimanager.create_api(Person, exclude_columns=['name', 'birth_date'])
+
+from cool_validation_framework import ValidationError
+apimanager.create_api(Person, validation_exceptions=[ValidationError])
+
+class PersonSchema(Schema):
+  id = fields.Integer()
+  name = fields.String()
+  
+  def make_object(self, data):
+    print('MAKING OBJECT FROM', data)
+    return Person(**data)
+    
+person_schema = PersonSchema()
+
+def person_serializer(instance):
+  return person_schema.dump(instance).data
+
+def person_deserializer(data):
+  return person_schema.load(data).data
+
+manager = APIManager(app, session=session)
+manager.create_api(Person, methods=['GET', 'POST'],
+  serializer=person_seializer,
+  deserializer=person_deserializer)
+
+apimanager.create_api(Person, collection_name='people')
+
+manager.create_api(User, primary_key='username')
+
+apimanager.create_api(Person, methods=['PATCH'], allow_patch_many=True)
+
+apimanager.create_api(Person, url_prefix='/api/v2')
+
+apimanager.create_api(Person, methods=['GET', 'POST', 'DELETE'])
+
+
 ```
