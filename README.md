@@ -404,4 +404,16 @@ apimanager.create_api(Person, url_prefix='/api/v2')
 apimanager.create_api(Person, methods=['GET', 'POST', 'DELETE'])
 
 
+import requests
+import json
+
+url = 'http://127.0.0.1:5000/api/person/'
+headers = {'Content-Type': 'application/json'}
+
+filters = [dict(name='name', op='like', val='%y%')]
+params = dict(q=json.dumps(dict(filters=filters)))
+
+response = requests.get(url, params=prams, headers=headers)
+assert response.status_code == 200
+print(response.json())
 ```
